@@ -1,9 +1,9 @@
 ## channel通信详解
 在go语言中最好的特性即是多并发，这可以让我们的效率得到很大的提升，本文主要是对channel进行深入探讨。   
 **并发**:并发是在同一个时刻只有一条指令执行，但是多个指令被轮换的切换，这样然我们错觉的认为这些指令是同时进行运行的，但是微观上而言，时间被分为若干段，使多个进程交替执行，打个比方，我们吃饭的时候我们先使用筷子夹菜吃饭，随后我们再用汤勺喝汤，此外我们还看手机，它们仍会有一个先后顺序之分的
-![](./1.png)     
+![](https://github.com/DYX1112/image/blob/main/1.png)     
 **并行**：而并行可以在同一时间段使多个进程同时进行运行，但基于此肯定是需要多核的，单核是完成不了此种特性的。比方说，我们有两台洗衣机，我们都从3点开始运行，4点停止，此时我们两台洗衣机都同时完成了工作，这就是并行
-![](./2.png)  
+![](https://github.com/DYX1112/image/blob/main/2.png)  
 而go中的goroutine是go中的并发体的重要思想（本文不重点探讨），而chan则是他们的媒介，当我们其中一个goroutine需要另一个goroutine的信息反馈时，此时我们就需要chan作为中间媒介进行通信   
 ```
 type hchan struct {
@@ -37,7 +37,7 @@ type waitq struct {
 
 ```
 其中first为sudog的首指针，end表示链表的最后一个
-![](./7.png)   
+![](https://github.com/DYX1112/image/blob/main/7.png)   
 ```
 // sudog represents a g in a wait list, such as for sending/receiving
 // on a channel.
@@ -150,7 +150,7 @@ func makechan(t *chantype, size int) *hchan {
 我们的send操作首先会对操作进行判断，判断chan是否为空，以及是否被阻塞，随后我们开始发送数据时会首先进行加锁操作，如果我们的接收者还有，我们则直接从waitq中取出接受者来进行接收数据，如果我们没有接收者我们就会先向buf中填入数据，并对sendx进行++和qcount++，一旦我们的缓冲区没有或为0则会放入waitq进行等待，直到再次被唤醒，下文会对其再次的解释，当我们的g进入等待时我们就会释放锁
 **receive**
 接收操作首先也会对chan进行相关分析，但是有个很怪的点就是当我们的chan已经关闭后，但是buf仍然有数据的话我们仍然可以从其中读取数据，按理说这样是不行的，但是golang有着自己的垃圾回收机制，所以不用担心。随后我们会判断是否存在被阻塞的发送者，如果有我们直接从发送者那里接收数据即可，这时我们是不用对其进行上锁操作的，下文同样会给出，随后我们会对缓冲区的数据进行接收读取，对recvx++操作，并对qcount--操作。    
-![](./3.png)   
+![](https://github.com/DYX1112/image/blob/main/3.png)   
  其中chan队列分为无缓冲区和有缓冲区队列   
 
  *无缓冲区队列*
@@ -177,11 +177,11 @@ func main(){
 接收channel中传过来的数据 2 此时我们便可以看出我们的子协程还未执行完，就被阻塞，开始执行主协程了
 */
 ```    
-![](./6.webp)   
+![](https://github.com/DYX1112/image/blob/main/6.webp)   
 我们的g是goroutine，M是线程，p是与调度相关的context，每一个线程都拥有一个p，每个p维护了一个可以运行的goroutine队列   
-![](./4.jpg)   
+![](https://github.com/DYX1112/image/blob/main/4.jpg)   
 但我们执行send操作时，此时我们向chan发送数据时，此时我们会包装成studgo结构体，此结构体含有g1协程的指针和元素的值的引用等，将此类sudog包装完成后会推入队列中，如果是发送者会推送到sendq等待队列中，然后我们的runtime会进行调度将g1进行等待阻塞   
-![](./5.webp)    
+![](https://github.com/DYX1112/image/blob/main/5.webp)    
 随后我们的runtime会调用g2执行，g2会从chan中接收数据后，（其实这里接收数据的过程其实是个拷贝的过程），会通知任务调度器，将g1状态设置为runnable，然后加入p的执行队列中，等待线程执行。    
 但我们g2先执行时，g1后执行时，我们还是首先调度g2，让其在channel中接收数据，因为是无缓冲区，所以也会包装成一个sudog结构体，同样包含着goroutine2的指针和空接收域等，进而将此sudog放入recvq中，并将g2进行阻塞，在此后当有个协程g1向channel中发消息时，**此时我们并不会锁住g1，我们直接将g1的数据进行copy到g2即可**，这样直接提高了效率。
 
